@@ -1,2 +1,6 @@
 # Output folders
 build
+
+# Visual Studio
+.vs
+.vscode
