@@ -11,7 +11,7 @@ namespace JMP
 {
     namespace Concurrent {
         
-        // This is an identifier that is assigned to Concurrent jobs.
+        // This is an identifier that is assigned to concurrent jobs.
         using Id = uint64_t;
 
         // The base class for our custom jobs. We must override the run() function with our implementation.
@@ -27,6 +27,10 @@ namespace JMP
             std::mutex _lock;
             std::queue<std::unique_ptr<Job>> _queue;
         public:
+
+            // Disallow copying
+            WorkQueue(WorkQueue const &) = delete;
+            WorkQueue& operator=(WorkQueue &) = delete;
 
             // Add a new job to the queue. The job can be of any type that inherits from JMP::Concurrent::Job.
             // Usage: my_queue.push<MyJob>(100, "a string");
@@ -48,6 +52,12 @@ namespace JMP
                     return std::unique_ptr<Job>(nullptr);
                 }
             }
+
+            // Is the queue empty?
+            bool empty() const {
+                std::unique_lock lock(_lock);
+                return _queue.empty();
+            }
         };
 
         // This is like WorkQueue but jobs are stored in a map, rather than a queue.
@@ -59,6 +69,10 @@ namespace JMP
             std::mutex _lock;
         public:
             WorkMap() : _current_id(1) {}
+
+            // Disallow copying
+            WorkMap(WorkMap const &) = delete;
+            WorkMap& operator=(WorkMap &) = delete;
 
             // Add a new job to the map. The job can be of any type that inherits from JMP::Concurrent::Job.
             // Returns the Id that was assigned to the job.
@@ -115,6 +129,12 @@ namespace JMP
                 std::unique_lock lock(_lock);
                 return _map.find(id) != _map.end();
             }
+
+            // Is the map empty?
+            bool empty() const {
+                std::unique_lock lock(_lock);
+                return _map.empty();
+            }
         };
 
         // This is a thread pool for running jobs concurrently.
@@ -126,11 +146,11 @@ namespace JMP
             WorkMap _completed_jobs;
             
             bool _active;
-            std::atomic<std::size_t> _thread_started;
+            // std::atomic<std::size_t> _thread_started;
             
 
             void _work() {
-                _thread_started++;
+                // _thread_started++;
                 while(_active) {
                     // Run jobs with no futures first
                     std::unique_ptr<Job> job = _queue.pop();
@@ -151,7 +171,7 @@ namespace JMP
             WorkPool() = delete;
 
             // We must specify the number of worker threads in the pool.
-            WorkPool(unsigned int worker_count) : _active(true), _thread_started(0) {
+            WorkPool(unsigned int worker_count) : _active(true) /*, _thread_started(0)*/ {
                 for (unsigned int i = 0; i < worker_count; i++) {
                     _workers.emplace_back(&WorkPool::_work, this);
                 }
@@ -163,25 +183,38 @@ namespace JMP
                 // In some cases, it's possible that the WorkPool will get destroyed before any thread has 
                 // started working. We need to make sure that all threads have actually started their work
                 // before joining.
-                while(_thread_started < _workers.size());
+                // while(_thread_started < _workers.size());
                 _active = false;
+                while(!_queue.empty() || !_future_jobs.empty());
                 for(std::thread & t : _workers) {
                     t.join();
                 }
             }
 
+            // Disallow copying
+            WorkPool(WorkPool const &) = delete;
+            WorkPool& operator=(WorkPool &) = delete;
+
             // Add a new job to the queue. The job can be of any type that inherits from JMP::Concurrent::Job.
             // Usage: my_pool.add_job<MyJob>(100, "a string");
             template <typename T, typename... Args>
             void add_job(Args... args) {
-                _queue.push<T>(args...);
+                if (_active) {
+                    _queue.push<T>(args...);
+                }
+                
             }
 
             // Add a new job but keep a reference so that it can be accessed after it is completed.
             // Returns the Id assigned to the job.
             template <typename T, typename... Args>
             JMP::Concurrent::Id add_future_job(Args... args) {
-                return _future_jobs.add<T>(args...);
+                if (_active) {
+                    return _future_jobs.add<T>(args...);
+                }
+                else {
+                    return 0;
+                }
             }
 
             // Checks to see if a job with the given Id has completed and is available to access.

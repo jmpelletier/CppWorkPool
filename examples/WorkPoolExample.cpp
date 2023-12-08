@@ -14,7 +14,7 @@ public:
         // When writing to cout concurrently, construct the string first.
         // If we don't do this, the output will be garbled when several threads
         // try to output to cout at the same time.
-        std::stringstream ss;
+        std::stringstream ss;d
         ss << _mess << std::endl;
         std::cout << ss.str();
     }
