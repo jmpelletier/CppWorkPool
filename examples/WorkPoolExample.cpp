@@ -14,7 +14,7 @@ public:
         // When writing to cout concurrently, construct the string first.
         // If we don't do this, the output will be garbled when several threads
         // try to output to cout at the same time.
-        std::stringstream ss;d
+        std::stringstream ss;
         ss << _mess << std::endl;
         std::cout << ss.str();
     }
@@ -119,6 +119,10 @@ int main(int argc, char const *argv[])
         }
         catch(std::bad_cast & e) {}
     }
+
+    // We cannot copy work pools. Neither of the two lines below should compile:
+    //JMP::Concurrent::WorkPool new_pool = pool;
+    //JMP::Concurrent::WorkPool new_pool(pool);
     
     return 0;
 }

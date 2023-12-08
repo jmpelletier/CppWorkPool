@@ -28,6 +28,8 @@ namespace JMP
             std::queue<std::unique_ptr<Job>> _queue;
         public:
 
+            WorkQueue() = default;
+
             // Disallow copying
             WorkQueue(WorkQueue const &) = delete;
             WorkQueue& operator=(WorkQueue &) = delete;
@@ -54,7 +56,7 @@ namespace JMP
             }
 
             // Is the queue empty?
-            bool empty() const {
+            bool empty() {
                 std::unique_lock lock(_lock);
                 return _queue.empty();
             }
@@ -131,7 +133,7 @@ namespace JMP
             }
 
             // Is the map empty?
-            bool empty() const {
+            bool empty() {
                 std::unique_lock lock(_lock);
                 return _map.empty();
             }
@@ -145,12 +147,9 @@ namespace JMP
             WorkMap _future_jobs;
             WorkMap _completed_jobs;
             
-            bool _active;
-            // std::atomic<std::size_t> _thread_started;
-            
+            bool _active;            
 
             void _work() {
-                // _thread_started++;
                 while(_active) {
                     // Run jobs with no futures first
                     std::unique_ptr<Job> job = _queue.pop();
@@ -171,7 +170,7 @@ namespace JMP
             WorkPool() = delete;
 
             // We must specify the number of worker threads in the pool.
-            WorkPool(unsigned int worker_count) : _active(true) /*, _thread_started(0)*/ {
+            WorkPool(unsigned int worker_count) : _active(true) {
                 for (unsigned int i = 0; i < worker_count; i++) {
                     _workers.emplace_back(&WorkPool::_work, this);
                 }
@@ -183,9 +182,8 @@ namespace JMP
                 // In some cases, it's possible that the WorkPool will get destroyed before any thread has 
                 // started working. We need to make sure that all threads have actually started their work
                 // before joining.
-                // while(_thread_started < _workers.size());
                 _active = false;
-                while(!_queue.empty() || !_future_jobs.empty());
+                wait_for_jobs();
                 for(std::thread & t : _workers) {
                     t.join();
                 }
@@ -228,6 +226,11 @@ namespace JMP
             std::unique_ptr<Job> pop_completed_job(JMP::Concurrent::Id job_id) {
                 std::pair<JMP::Concurrent::Id, std::unique_ptr<Job>> pair = _completed_jobs.pop(job_id);
                 return std::move(pair.second);
+            }
+
+            // Waits for all jobs to complete. This is a blocking call.
+            void wait_for_jobs() {
+                while (!_queue.empty() || !_future_jobs.empty());
             }
         };
 
