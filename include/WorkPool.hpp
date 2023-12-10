@@ -14,13 +14,24 @@ namespace JMP
         // This is an identifier that is assigned to concurrent jobs.
         using Id = uint64_t;
 
+        // Forward declaration
+        class WorkQueue;
+        class WorkMap;
+
         // The base class for our custom jobs. We must override the run() function with our implementation.
         class Job {
+        protected:
+            friend class WorkQueue;
+            friend class WorkMap;
+            Id _id;
         public:
+            Job() = default;
             virtual ~Job() = default;
             virtual void run() = 0;
             virtual void preprocess() {}
             virtual void postprocess() {}
+
+            Id id() const { return _id; }
         };
 
         // This is a convenience wrapper for storing jobs.
@@ -84,7 +95,10 @@ namespace JMP
             template <typename T, typename... Args>
             JMP::Concurrent::Id add(Args... args) {
                 _current_id++;
-                _map[_current_id] = std::make_unique<T>(args...);
+                std::unique_ptr<T> job = std::make_unique<T>(args...);
+                job->_id = _current_id;
+                _map[_current_id] = std::move(job);
+                
                 return _current_id;
             }
 
@@ -92,8 +106,13 @@ namespace JMP
             // Returns the Id that was assigned to the job (same as first argument).
             // Usage: JMP::Concurrent::Id my_id = my_map.add<MyJob>(100, "a string");
             JMP::Concurrent::Id add(std::pair<JMP::Concurrent::Id, std::unique_ptr<Job>> & pair) {
+                pair.second->_id = pair.first;
                 _map[pair.first] = std::move(pair.second);
                 return pair.first;
+            }
+
+            std::map<JMP::Concurrent::Id, std::unique_ptr<Job>>::iterator find(JMP::Concurrent::Id id) {
+                return _map.find(id);
             }
 
             // Removes and returns a unique pointer to the first job in the map. This may not necessarily be the oldest job.
