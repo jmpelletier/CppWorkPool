@@ -19,6 +19,8 @@ namespace JMP
         public:
             virtual ~Job() = default;
             virtual void run() = 0;
+            virtual void preprocess() {}
+            virtual void postprocess() {}
         };
 
         // This is a convenience wrapper for storing jobs.
@@ -154,13 +156,17 @@ namespace JMP
                     // Run jobs with no futures first
                     std::unique_ptr<Job> job = _queue.pop();
                     if (job) {
+                        job->preprocess();
                         job->run();
+                        job->postprocess();
                     }
 
                     // Then run jobs with futures
                     std::pair<JMP::Concurrent::Id, std::unique_ptr<Job>> pair = _future_jobs.pop();
                     if (pair.second) {
+                        pair.second->preprocess();
                         pair.second->run();
+                        pair.second->postprocess();
                         _completed_jobs.add(pair);
                     }
                 }
